@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JetBus Pro | Sistema de Venta de Pasajes</title>
+    <style>
+        :root {
+            --primary: #003580; --accent: #006ce4; --success: #28a745;
+            --danger: #dc3545; --warning: #ffc107; --bg: #f5f7fa;
+            --card: #ffffff; --text: #1a1a1a; --gray: #6b7280;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--text); padding-bottom: 50px; }
+
+        /* --- ESTILOS DE PANTALLA (NO TOCAR) --- */
+        header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -1px; }
+        .logo span { color: #febb02; }
+        .office-selector { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+        .office-selector option { color: black; }
+        .container { max-width: 1200px; margin: 2rem auto; display: grid; grid-template-columns: 1fr 350px; gap: 2rem; padding: 0 1rem; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+        .card { background: var(--card); border-radius: 12px; padding: 1.5rem; border: 1px solid #e5e7eb; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        h2 { font-size: 1rem; color: var(--primary); margin-bottom: 1.2rem; text-transform: uppercase; letter-spacing: 0.5px; border-left: 4px solid var(--accent); padding-left: 10px; }
+        .hidden { display: none !important; }
+        .btn { padding: 0.6rem 1rem; border: none; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; text-align: center; font-size: 0.9rem; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-warning { background: var(--warning); color: #333; }
+        .btn-dark { background: #343a40; color: white; }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.8rem; margin-left: 5px; }
+        .btn:disabled { background: #9ca3af; cursor: not-allowed; }
+        .search-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1rem; }
+        select, input, textarea { width: 100%; padding: 0.7rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.9rem; outline: none; }
+        .steps { display: flex; justify-content: space-between; margin-bottom: 1.5rem; background: white; padding: 0.8rem; border-radius: 50px; border: 1px solid #e5e7eb; }
+        .step { font-size: 0.8rem; font-weight: 700; color: #9ca3af; padding: 0 1rem; }
+        .step.active { color: var(--accent); }
+        .bus-layout { background: white; padding: 2rem; border: 2px solid #e5e7eb; border-radius: 40px 40px 10px 10px; max-width: 320px; margin: auto; display: grid; grid-template-columns: repeat(2, 1fr) 25px repeat(2, 1fr); gap: 10px; }
+        .seat { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); transition: 0.2s; }
+        .seat.available { background: #e8f0fe; color: var(--primary); }
+        .seat.selected { background: var(--accent); color: white; transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,108,228,0.3); }
+        .seat.occupied { background: #d1d5db; color: #9ca3af; cursor: not-allowed; border: none; }
+        .aisle { grid-column: 3; }
+        .bus-nose { grid-column: 1/-1; background: #333; color: white; text-align: center; padding: 5px; border-radius: 4px; font-size: 0.7rem; margin-bottom: 10px; }
+        .pax-form-block { background: #f9fafb; padding: 1rem; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--accent); border: 1px solid #eee; }
+        .pax-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+        .trip-item { border-bottom: 1px solid #eee; padding: 10px 0; font-size: 0.85rem; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-card { background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; }
+
+        /* --- ESTILOS DE IMPRESIÓN TÉRMICA (80mm) --- */
+        @media print {
+            @page { margin: 0; size: auto; } /* Eliminar márgenes de hoja por defecto */
+            body { margin: 0; padding: 0; background: white; }
+            body * { visibility: hidden; height: 0; overflow: hidden; } /* Ocultar todo */
+            
+            #printable-area, #printable-area * { 
+                visibility: visible; 
+                height: auto; 
+                overflow: visible; 
+            }
+            
+            #printable-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 74mm; /* Ancho seguro para papel de 80mm */
+                padding: 2mm;
+                font-family: 'Courier New', monospace; /* Fuente monoespaciada tipo ticket */
+                font-size: 12px;
+                color: black;
+            }
+
+            .modal-card { 
+                box-shadow: none; 
+                padding: 0; 
+                width: auto; 
+                max-width: none; 
+                position: static; 
+            }
+
+            /* Estilo Ticket Individual */
+            .ticket {
+                border: none;
+                border-bottom: 2px dashed black;
+                margin-bottom: 15px;
+                padding-bottom: 15px;
+                page-break-inside: avoid; /* Intentar no cortar el ticket a la mitad */
+            }
+            .ticket h3 { font-size: 16px; margin: 5px 0; text-align: center; }
+            .ticket p { margin: 3px 0; font-size: 12px; }
+            .ticket hr { border-top: 1px dashed black; margin: 5px 0; }
+            .ticket .total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 5px; }
+
+            /* Estilo Planilla Compacta */
+            .manifest-header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid black; padding-bottom: 5px; }
+            .manifest-header h1 { font-size: 16px; margin: 0; }
+            .manifest-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+            .manifest-table th { border-bottom: 1px solid black; text-align: left; }
+            .manifest-table td { border-bottom: 1px dotted #ccc; padding: 4px 0; vertical-align: top; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">Buses<span>Cordillera</span></div>
+        <div style="display:flex; align-items:center; gap:10px">
+            <label for="current-office" style="font-size:0.9rem">Oficina:</label>
+            <select id="current-office" class="office-selector">
+                <option value="">Cargando...</option>
+            </select>
+        </div>
+    </header>
+
+    <div class="container">
+        <main>
+            <div class="steps">
+                <div class="step active" id="st-1">1. Bus</div>
+                <div class="step" id="st-2">2. Asientos</div>
+                <div class="step" id="st-3">3. Pasajeros</div>
+                <div class="step" id="st-4">4. Emisión</div>
+            </div>
+
+            <section class="card">
+                <h2>1. Búsqueda de Viaje</h2>
+                <div class="search-grid">
+                    <div><label style="font-size:0.8rem; font-weight:bold; color:gray">ORIGEN</label><select id="origen"></select></div>
+                    <div><label style="font-size:0.8rem; font-weight:bold; color:gray">DESTINO</label><select id="destino"></select></div>
+                    <div><label style="font-size:0.8rem; font-weight:bold; color:gray">FECHA</label><input type="date" id="fecha"></div>
+                </div>
+                <button id="btn-buscar" class="btn btn-primary" style="width:100%">BUSCAR DISPONIBILIDAD</button>
+            </section>
+
+            <section id="results-area" class="card hidden">
+                <h2>2. Horarios Disponibles</h2>
+                <div id="schedule-list"></div>
+            </section>
+
+            <section id="pax-count-area" class="card hidden">
+                <h2>3. Selección de Tarifas</h2>
+                <div id="pax-counters" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap"></div>
+                <button id="btn-to-seats" class="btn btn-primary" style="width:100%; margin-top:15px" disabled>ELEGIR ASIENTOS</button>
+            </section>
+
+            <section id="seat-area" class="card hidden">
+                <h2>4. Mapa de Asientos <span id="seat-badge" style="background:var(--accent); color:white; padding:2px 8px; border-radius:10px; font-size:0.8rem"></span></h2>
+                <div class="bus-layout">
+                    <div class="bus-nose">CABINA DEL CONDUCTOR</div>
+                    <div id="bus-layout-grid" style="display:contents"></div>
+                </div>
+            </section>
+
+            <section id="confirm-area" class="card hidden">
+                <h2>5. Datos de Pasajeros</h2>
+                <div id="passenger-forms"></div>
+                <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px">
+                    <label style="font-weight:bold; font-size:0.9rem">Nota de Subida (Chofer)</label>
+                    <textarea id="p-note" placeholder="Ej: Sube en el cruce, paradero norte..." style="margin: 5px 0; height: 60px;"></textarea>
+                    <label style="font-weight:bold; font-size:0.9rem">Método de Pago</label>
+                    <select id="p-method" style="margin-top:5px; margin-bottom:15px"><option>Efectivo</option><option>Tarjeta</option></select>
+                    <button id="btn-finalizar" class="btn btn-success" style="width:100%">CONFIRMAR Y EMITIR BOLETOS</button>
+                </div>
+            </section>
+        </main>
+
+        <aside>
+            <div class="card">
+                <h3>Gestión de Flota</h3>
+                <div id="admin-trips" style="margin-top:10px"></div>
+            </div>
+            <div class="card">
+                <h3>Cierre de Caja</h3>
+                <p style="font-size:0.8rem; margin-bottom:5px; color:#666">Reporte de ventas por oficina.</p>
+                <input type="date" id="cierre-fecha" style="margin-bottom:5px">
+                <button id="btn-cierre" class="btn btn-dark" style="width:100%">GENERAR CIERRE</button>
+            </div>
+            <div class="card">
+                <h3>Reimpresión</h3>
+                <input type="text" id="reprint-rut" placeholder="RUT Pasajero (Ej: 12.345.678-9)" style="margin-bottom:5px">
+                <button id="btn-reprint" class="btn btn-warning" style="width:100%">BUSCAR POR RUT</button>
+            </div>
+            <div class="card">
+                <h3>Anulación</h3>
+                <input type="text" id="anular-folio" placeholder="Folio (Ej: 090226-001)" style="margin-bottom:5px">
+                <button id="btn-anular" class="btn btn-danger" style="width:100%">ANULAR VENTA</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Modal Impresión -->
+    <div id="print-overlay" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div id="printable-area"></div>
+            <div style="display:flex; gap:10px; margin-top:20px; justify-content: flex-end; padding: 20px;">
+                <button onclick="window.print()" class="btn btn-primary">IMPRIMIR</button>
+                <button onclick="document.getElementById('print-overlay').classList.add('hidden')" class="btn btn-danger">CERRAR</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let appData = {};
+        let sel = { vId:null, oId:null, dId:null, base:0, pax:{}, total:0, seats:[] };
+
+        const init = async () => {
+            try {
+                const res = await fetch('api/app_init.php');
+                const json = await res.json();
+                if (json.success) { appData = json.data; renderInit(); }
+            } catch (e) { console.error("Error conexión:", e); }
+        };
+
+        const renderInit = () => {
+            const paradas = appData.paradas.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+            const opts = '<option value="">Seleccione...</option>' + paradas.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+            document.getElementById('origen').innerHTML = opts;
+            document.getElementById('destino').innerHTML = opts;
+            
+            // Set default date for closure
+            document.getElementById('cierre-fecha').value = new Date().toISOString().split('T')[0];
+            
+            if(appData.oficinas) {
+                document.getElementById('current-office').innerHTML = appData.oficinas.map(o => `<option value="${o.id}">${o.nombre}</option>`).join('');
+            }
+            const adminList = document.getElementById('admin-trips');
+            if(appData.viajes.length === 0) adminList.innerHTML = "<small>No hay viajes programados.</small>";
+            else adminList.innerHTML = appData.viajes.map(v => `
+                <div class="trip-item">
+                    <strong>VIAJE #${v.id} - ${v.fecha_hora_salida.split(' ')[1]}</strong>
+                    Bus #${v.numero_bus} | Chofer: ${v.chofer_nombre}
+                    <div style="margin-top:5px">
+                        <button class="btn btn-sm" style="background:#eee" onclick="window.cambiarBus(${v.id})">Reasignar</button>
+                        <button class="btn btn-sm btn-primary" onclick="window.printManifest(${v.id}, '${v.fecha_hora_salida}', '${v.numero_bus}', '${v.patente}')">🖨️ Planilla</button>
+                    </div>
+                </div>`).join('');
+        };
+
+        document.getElementById('btn-buscar').onclick = async () => {
+            const o = document.getElementById('origen').value, d = document.getElementById('destino').value, f = document.getElementById('fecha').value;
+            if(!o || !d || !f) return alert("Complete los datos.");
+            const fd = new FormData(); fd.append('o', o); fd.append('d', d); fd.append('f', f);
+            const res = await fetch('api/trips.php', { method:'POST', body:fd });
+            const json = await res.json();
+            sel.oId = o; sel.dId = d;
+            document.getElementById('results-area').classList.remove('hidden');
+            document.getElementById('st-1').classList.add('active');
+            document.getElementById('schedule-list').innerHTML = json.viajes.length ? json.viajes.map(v => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:15px; border:1px solid #ddd; border-radius:8px; margin-bottom:10px">
+                    <div><strong>SALIDA: ${v.fecha_hora_salida.split(' ')[1]}</strong><br><small>Bus #${v.numero_bus} (${v.patente}) | ${v.chofer_nombre}</small></div>
+                    <button class="btn btn-primary" onclick="selectViaje(${v.id})">ELEGIR</button>
+                </div>`).join('') : "<p>No hay servicios.</p>";
+        };
+
+        window.selectViaje = (id) => {
+            sel.vId = id;
+            const tramo = appData.preciosTramos.find(p => p.origen_id == sel.oId && p.destino_id == sel.dId);
+            if(!tramo) return alert("Tramo sin precio.");
+            sel.base = parseFloat(tramo.precio);
+            document.getElementById('pax-counters').innerHTML = appData.tarifas.map(t => `
+                <div style="text-align:center; background:#f9fafb; padding:10px; border-radius:10px; border:1px solid #eee; min-width:100px">
+                    <div style="font-size:0.75rem; font-weight:bold; margin-bottom:5px">${t.nombre}</div>
+                    <div><button class="btn btn-secondary" onclick="upPax(${t.id}, -1)">-</button><strong id="p-v-${t.id}" style="margin:0 5px">0</strong><button class="btn btn-secondary" onclick="upPax(${t.id}, 1)">+</button></div>
+                </div>`).join('');
+            document.getElementById('pax-count-area').classList.remove('hidden');
+            document.getElementById('st-2').classList.add('active');
+            sel.pax={}; sel.total=0;
+        };
+
+        window.upPax = (tid, d) => {
+            sel.pax[tid] = Math.max(0, (sel.pax[tid]||0)+d);
+            document.getElementById(`p-v-${tid}`).innerText = sel.pax[tid];
+            sel.total = Object.values(sel.pax).reduce((a,b)=>a+b, 0);
+            document.getElementById('btn-to-seats').disabled = (sel.total === 0);
+        };
+
+        document.getElementById('btn-to-seats').onclick = async () => {
+            document.getElementById('seat-area').classList.remove('hidden');
+            document.getElementById('st-3').classList.add('active');
+            const bus = appData.buses.find(b => b.id == appData.viajes.find(v => v.id == sel.vId).bus_id);
+            const fd = new FormData(); fd.append('viaje_id', sel.vId); fd.append('o_id', sel.oId); fd.append('d_id', sel.dId);
+            const res = await fetch('api/seats.php', { method:'POST', body:fd });
+            const json = await res.json();
+            const ocupados = json.asientos_ocupados || [];
+            let h = ''; 
+            for(let i=1; i<=bus.asientos; i++) {
+                let cls = ocupados.includes(String(i)) ? 'occupied' : 'available';
+                h += `<div class="seat ${cls}" data-num="${i}">${i}</div>`;
+                if(i%4==2) h += '<div class="aisle"></div>';
+            }
+            document.getElementById('bus-layout-grid').innerHTML = h; sel.seats = []; updateSeatUI();
+            document.getElementById('bus-layout-grid').onclick = (e) => {
+                if(!e.target.classList.contains('available') && !e.target.classList.contains('selected')) return;
+                const n = e.target.dataset.num;
+                if(sel.seats.includes(n)) { sel.seats = sel.seats.filter(s=>s!=n); e.target.classList.remove('selected'); }
+                else if(sel.seats.length < sel.total) { sel.seats.push(n); e.target.classList.add('selected'); }
+                updateSeatUI();
+            };
+        };
+
+        function updateSeatUI() {
+            document.getElementById('seat-badge').innerText = `${sel.seats.length} / ${sel.total}`;
+            if(sel.seats.length == sel.total && sel.total > 0) {
+                document.getElementById('confirm-area').classList.remove('hidden');
+                document.getElementById('st-4').classList.add('active');
+                let h = ''; let sIdx = 0;
+                for(const [tid, cant] of Object.entries(sel.pax)) {
+                    const tarifa = appData.tarifas.find(t=>t.id==tid).nombre;
+                    for(let i=0; i<cant; i++) {
+                        h += `<div class="pax-form-block" data-seat="${sel.seats[sIdx++]}" data-tarifa="${tid}">
+                            <h4>Asiento ${sel.seats[sIdx-1]} (${tarifa})</h4>
+                            <div class="pax-grid"><input type="text" class="p-rut" placeholder="RUT" onblur="checkP(this)"><input type="text" class="p-nombre" placeholder="Nombre"></div>
+                        </div>`;
+                    }
+                }
+                document.getElementById('passenger-forms').innerHTML = h;
+            } else document.getElementById('confirm-area').classList.add('hidden');
+        }
+
+        window.checkP = async (inp) => {
+            if(!inp.value) return; const res = await fetch(`api/passengers.php?rut=${inp.value}`);
+            const j = await res.json(); if(j.pasajero) inp.closest('.pax-form-block').querySelector('.p-nombre').value = j.pasajero.nombre_completo;
+        };
+
+        document.getElementById('btn-finalizar').onclick = async () => {
+            const ofi = document.getElementById('current-office').value; if(!ofi) return alert("Seleccione oficina.");
+            const passengers = []; let valid = true;
+            document.querySelectorAll('.pax-form-block').forEach(b=>{
+                const r = b.querySelector('.p-rut').value, n = b.querySelector('.p-nombre').value;
+                if(!r || !n) valid=false;
+                passengers.push({ asiento: b.dataset.seat, tarifaId: b.dataset.tarifa, rut: r, nombre: n });
+            });
+            if(!valid) return alert("Complete los datos.");
+            const data = { viajeId: sel.vId, oId: sel.oId, dId: sel.dId, oficinaId: ofi, metodo: document.getElementById('p-method').value, anotacion: document.getElementById('p-note').value, basePrice: sel.base, passengers };
+            try {
+                const res = await fetch('api/sales.php', { method:'POST', body: JSON.stringify(data) });
+                const j = await res.json();
+                if(j.success) renderTickets(j.tickets); else alert(j.error);
+            } catch(e) { alert("Error conexión"); }
+        };
+
+        // Reimpresión
+        document.getElementById('btn-reprint').onclick = async () => {
+            const rut = document.getElementById('reprint-rut').value; if(!rut) return alert("Ingrese RUT.");
+            const fd = new FormData(); fd.append('rut', rut);
+            try { const r = await fetch('api/reprint.php', {method:'POST', body:fd}); const j = await r.json();
+            if(j.success) renderTickets(j.tickets); else alert(j.error); } catch(e){alert("Error");}
+        };
+
+        // Anulación
+        document.getElementById('btn-anular').onclick = async () => {
+            const folio = document.getElementById('anular-folio').value;
+            if(!folio) return alert("Ingrese folio.");
+            if(!confirm("¿Desea ANULAR la venta " + folio + "?")) return;
+            
+            const fd = new FormData(); fd.append('folio', folio);
+            try { 
+                const r = await fetch('api/cancel.php', {method:'POST', body:fd}); 
+                const j = await r.json();
+                if(j.success) { alert("Venta anulada correctamente"); location.reload(); } 
+                else alert(j.error); 
+            } catch(e){alert("Error");}
+        };
+
+        // Cierre Caja
+        document.getElementById('btn-cierre').onclick = async () => {
+            const ofi = document.getElementById('current-office').value; if(!ofi) return alert("Seleccione oficina.");
+            const fecha = document.getElementById('cierre-fecha').value; if(!fecha) return alert("Seleccione fecha.");
+            const fd = new FormData(); fd.append('oficina_id', ofi); fd.append('fecha', fecha);
+            try { const r = await fetch('api/cash_close.php', {method:'POST', body:fd}); const j = await r.json();
+            if(j.success) {
+                let h = `<div class="ticket"><h3>CIERRE DE CAJA</h3><center>${j.oficina}<br>${j.fecha}</center><hr><table>`;
+                j.detalles.forEach(d => h+=`<tr><td width="70%">${d.metodo_pago}</td><td align="right">$${parseInt(d.total).toLocaleString()}</td></tr>`);
+                h += `</table><hr><div class="total">TOTAL: $${parseInt(j.total_general).toLocaleString()}</div></div>`;
+                document.getElementById('printable-area').innerHTML = h;
+                document.getElementById('print-overlay').classList.remove('hidden');
+            } else alert(j.error); } catch(e){alert("Error");}
+        };
+
+        function renderTickets(tickets) {
+            document.getElementById('printable-area').innerHTML = tickets.map(t => `
+                <div class="ticket">
+                    <h3>JETBUS PRO</h3>
+                    <center>Folio: ${t.folio}</center>
+                    <hr>
+                    <p><strong>RUTA:</strong> ${t.origen} -> ${t.destino}</p>
+                    <p><strong>BUS:</strong> ${t.numero_bus} | <strong>AS:</strong> <span style="font-size:14px">${t.asiento}</span></p>
+                    <p><strong>SALIDA:</strong> ${t.salida}</p>
+                    <hr>
+                    <p>PAX: ${t.pasajero}</p>
+                    <p>RUT: ${t.rut}</p>
+                    <p>TARIFA: ${t.tarifa}</p>
+                    ${t.anotacion ? `<p>NOTA: ${t.anotacion}</p>` : ''}
+                    <div class="total">TOTAL: $${Math.round(t.valor).toLocaleString('es-CL')}</div>
+                </div>`).join('');
+            document.getElementById('print-overlay').classList.remove('hidden');
+        }
+
+        window.printManifest = async (vid, fecha, bus, pat) => {
+            try { const r = await fetch(`api/manifest.php?action=details&viaje_id=${vid}`); const j = await r.json();
+            if(j.success) {
+                const pax = Object.values(j.passengers).sort((a,b)=>parseInt(a.numero_asiento)-parseInt(b.numero_asiento));
+                let h = `<div class="manifest-header"><h1>PLANILLA DE VIAJE</h1>${fecha}<br>BUS: ${bus} (${pat})</div>
+                <table class="manifest-table"><tr><th width="10%">AS</th><th>PASAJERO</th><th width="15%">BAJA</th></tr>`;
+                pax.forEach(p => h+=`<tr><td>${p.numero_asiento}</td><td>${p.pasajero_nombre.substring(0,20)}<br><small>${p.pasajero_rut}</small></td><td>${p.baja_en.substring(0,10)}</td></tr>`);
+                h += `</table><br><center>FIRMA CONDUCTOR</center>`;
+                document.getElementById('printable-area').innerHTML = h;
+                document.getElementById('print-overlay').classList.remove('hidden');
+            } else alert("Error"); } catch(e){alert("Error");}
+        };
+
+        window.cambiarBus = (vid) => {
+             const b = prompt("N° Bus:"), c = prompt("Chofer:"); if(b&&c) {
+             const fd = new FormData(); fd.append('action','update_viaje'); fd.append('viaje_id',vid); fd.append('numero_bus',b); fd.append('chofer',c);
+             fetch('api/admin.php',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{if(d.success)location.reload();else alert(d.error);});
+        }};
+
+        init();
+    </script>
+</body>
+</html>
