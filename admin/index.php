@@ -2,19 +2,33 @@
 // admin/index.php
 require_once '../config/db.php';
 
-// Cargar las paradas únicas desde la matriz de precios para los selectores
-$stmt = $pdo->query("SELECT DISTINCT origen_tramo as nombre FROM matriz_precios UNION SELECT DISTINCT destino_tramo FROM matriz_precios");
-$paradas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+// Cargar las paradas únicas desde la matriz de precios de forma segura
+try {
+    $stmt = $pdo->query("
+        SELECT ciudad FROM (
+            SELECT DISTINCT origen_tramo as ciudad FROM matriz_precios 
+            UNION 
+            SELECT DISTINCT destino_tramo as ciudad FROM matriz_precios
+        ) AS lista_ciudades ORDER BY ciudad
+    ");
+    $paradas = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (Exception $e) {
+    $paradas = [];
+}
 
-// Cargar los viajes programados para hoy o el futuro
-$stmt = $pdo->query("
-    SELECT v.id, v.fecha_hora, b.numero_maquina, b.patente, b.capacidad
-    FROM viajes v 
-    JOIN buses b ON v.id_bus = b.id 
-    WHERE v.fecha_hora >= CURRENT_DATE 
-    ORDER BY v.fecha_hora ASC
-");
-$viajes = $stmt->fetchAll();
+// Cargar los viajes programados
+try {
+    $stmt = $pdo->query("
+        SELECT v.id, v.fecha_hora, b.numero_maquina, b.patente, b.capacidad
+        FROM viajes v 
+        JOIN buses b ON v.id_bus = b.id 
+        WHERE v.fecha_hora >= CURRENT_DATE 
+        ORDER BY v.fecha_hora ASC
+    ");
+    $viajes = $stmt->fetchAll();
+} catch (Exception $e) {
+    $viajes = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -67,22 +81,53 @@ $viajes = $stmt->fetchAll();
         .pax-form-block { background: #f9fafb; padding: 1rem; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--accent); border: 1px solid #eee; }
         .pax-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
         
-        /* Modales e Impresión */
+        /* Modales e Impresión Térmica */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-card { background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 95%; max-height: 90vh; overflow-y: auto; }
 
         @media print {
-            @page { margin: 0; size: auto; } 
+            /* Rollo de 80mm y corte automático */
+            @page { margin: 0; size: 80mm auto; } 
+            
             body { margin: 0; padding: 0; background: white; }
             body * { visibility: hidden; height: 0; overflow: hidden; } 
+            
             #printable-area, #printable-area * { visibility: visible; height: auto; overflow: visible; }
-            #printable-area { position: absolute; left: 0; top: 0; width: 74mm; padding: 2mm; font-family: 'Courier New', monospace; font-size: 12px; color: black; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 75mm; padding: 2mm; font-family: 'Courier New', monospace; font-size: 12px; color: black; }
+            
             .modal-card { box-shadow: none; padding: 0; width: auto; max-width: none; position: static; }
-            .ticket { border: none; border-bottom: 2px dashed black; margin-bottom: 15px; padding-bottom: 15px; page-break-inside: avoid; }
+            
+            .ticket { 
+                border: none; 
+                margin: 0; 
+                padding-bottom: 5mm; 
+                page-break-after: always; 
+                break-after: page;
+            }
+            
             .ticket h3 { font-size: 16px; margin: 5px 0; text-align: center; }
             .ticket p { margin: 3px 0; font-size: 12px; }
             .ticket hr { border-top: 1px dashed black; margin: 5px 0; }
             .ticket .total { font-size: 16px; font-weight: bold; text-align: right; margin-top: 5px; }
+            
+            /* ESTILOS DEL TALÓN DE CORTE */
+            .cut-line { 
+                margin: 15px 0 10px 0; 
+                text-align: center; 
+                border-top: 2px dashed black; 
+                position: relative;
+            }
+            .cut-line::before {
+                content: "✂";
+                position: absolute;
+                top: -10px;
+                left: 5%;
+                font-size: 16px;
+                background: white;
+                padding: 0 5px;
+            }
+            .stub { padding-top: 5px; }
+            .stub p { margin: 2px 0; font-size: 12px; font-weight: bold; }
         }
     </style>
 </head>
@@ -119,7 +164,7 @@ $viajes = $stmt->fetchAll();
                         <select id="origen">
                             <option value="">Seleccione...</option>
                             <?php foreach($paradas as $p): ?>
-                                <option value="<?= $p ?>"><?= $p ?></option>
+                                <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -128,7 +173,7 @@ $viajes = $stmt->fetchAll();
                         <select id="destino">
                             <option value="">Seleccione...</option>
                             <?php foreach($paradas as $p): ?>
-                                <option value="<?= $p ?>"><?= $p ?></option>
+                                <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -163,7 +208,7 @@ $viajes = $stmt->fetchAll();
                             <select id="tipo-tarifa" onchange="actualizarPrecio()"></select>
                         </div>
                         <div class="pax-grid">
-                            <input type="text" id="p-rut" placeholder="RUT (Sin puntos)">
+                            <input type="text" id="p-rut" placeholder="RUT (Sin puntos)" onblur="buscarPasajeroPorRut()">
                             <input type="text" id="p-nombre" placeholder="Nombre Completo">
                         </div>
                         <input type="text" id="p-telefono" placeholder="Teléfono" style="margin-top:10px;">
@@ -190,7 +235,7 @@ $viajes = $stmt->fetchAll();
             
             <div class="card">
                 <h3>🖨️ Reimpresión / 🚫 Anulación</h3>
-                <input type="text" id="gestion-ticket" placeholder="Código (Ej: TKT-1234) o RUT" style="margin-bottom:5px">
+                <input type="text" id="gestion-ticket" placeholder="RUT, WEB-123 o CAJA-123" style="margin-bottom:5px">
                 <div style="display:flex; gap:5px;">
                     <button class="btn btn-warning" style="flex:1" onclick="buscarParaImprimir()">BUSCAR</button>
                     <button class="btn btn-danger" style="flex:1" onclick="anularBoleto()">ANULAR</button>
@@ -222,7 +267,6 @@ $viajes = $stmt->fetchAll();
 
             if(!o || !d || !f) return alert("Complete Origen, Destino y Fecha");
 
-            // Llamamos a la API para ver si hay viajes y obtener los precios de este tramo
             const fd = new FormData(); fd.append('origen', o); fd.append('destino', d); fd.append('fecha', f);
             const res = await fetch('api/buscar_viajes.php', { method: 'POST', body: fd });
             const json = await res.json();
@@ -259,14 +303,12 @@ $viajes = $stmt->fetchAll();
             datosViaje.destino = document.getElementById('destino').value;
             datosViaje.asiento = null;
 
-            // Guardar precios del tramo
             preciosTramo = {
                 'ADULTO': viaje.precio_adulto,
                 'MAYOR': viaje.precio_mayor,
                 'ESTUDIANTE': viaje.precio_estudiante
             };
 
-            // Llenar selector de tarifas
             document.getElementById('tipo-tarifa').innerHTML = `
                 <option value="ADULTO" data-price="${preciosTramo.ADULTO}">Adulto - $${preciosTramo.ADULTO}</option>
                 <option value="MAYOR" data-price="${preciosTramo.MAYOR}">Tercera Edad - $${preciosTramo.MAYOR}</option>
@@ -276,30 +318,25 @@ $viajes = $stmt->fetchAll();
             document.getElementById('seat-area').classList.remove('hidden');
             document.getElementById('st-3').classList.add('active');
 
-            // Cargar mapa (Usamos la API get_mapa que creamos en el paso anterior)
             const res = await fetch(`api/get_mapa.php?id=${viaje.id}`);
             const asientos = await res.json();
             
             let h = '';
             asientos.forEach(a => {
-                // Dibujar pasillo
                 if(a.nro % 4 === 3) h += '<div class="aisle"></div>';
-                
-                let cls = a.estado; // libre, ocupado, bloqueado
+                let cls = a.estado; 
                 h += `<div class="seat ${cls}" data-nro="${a.nro}" onclick="clickAsiento(this, ${a.nro}, '${cls}')">${a.nro}</div>`;
             });
             document.getElementById('bus-layout-grid').innerHTML = h;
             
-            document.getElementById('confirm-area').classList.add('hidden'); // Ocultar form si cambia de bus
+            document.getElementById('confirm-area').classList.add('hidden'); 
         }
 
         // 3. ELEGIR ASIENTO
         function clickAsiento(elemento, nro, estado) {
             if(estado !== 'libre') return;
 
-            // Quitar seleccion previa
             document.querySelectorAll('.seat.seleccionado').forEach(s => s.classList.replace('seleccionado', 'libre'));
-            
             elemento.classList.replace('libre', 'seleccionado');
             datosViaje.asiento = nro;
             
@@ -356,10 +393,8 @@ $viajes = $stmt->fetchAll();
                     total: datosViaje.precioFinal,
                     fecha: new Date().toLocaleString()
                 });
-                // Recargar mapa para marcarlo rojo
                 seleccionarViaje({id: datosViaje.id, precio_adulto: preciosTramo.ADULTO, precio_mayor: preciosTramo.MAYOR, precio_estudiante: preciosTramo.ESTUDIANTE});
                 
-                // Limpiar form
                 document.getElementById('p-rut').value = '';
                 document.getElementById('p-nombre').value = '';
                 document.getElementById('p-telefono').value = '';
@@ -368,12 +403,12 @@ $viajes = $stmt->fetchAll();
             }
         }
 
-        // 5. RENDERIZAR TICKET TÉRMICO
+        // 5. RENDERIZAR TICKET TÉRMICO Y TALÓN DE CONTROL
         function generarTicketImpresion(t) {
             const html = `
                 <div class="ticket">
                     <h3>JETBUS PRO</h3>
-                    <center>Oficina Venta<br>Folio: ${t.folio}</center>
+                    <center>Boleto / Pasaje<br>Folio: ${t.folio}</center>
                     <hr>
                     <p><strong>FECHA EMISIÓN:</strong> ${t.fecha}</p>
                     <p><strong>RUTA:</strong> ${t.origen} -> ${t.destino}</p>
@@ -384,18 +419,83 @@ $viajes = $stmt->fetchAll();
                     <p>TARIFA: ${t.tarifa}</p>
                     <div class="total">TOTAL: $${new Intl.NumberFormat('es-CL').format(t.total)}</div>
                     <center><small>Conserve este boleto</small></center>
+                    
+                    <div class="cut-line"></div>
+                    <div class="stub">
+                        <center><small>TALÓN AUXILIAR</small></center>
+                        <p>FOLIO: ${t.folio}</p>
+                        <p>ASIENTO: <span style="font-size:16px">${t.asiento}</span></p>
+                        <p>RUTA: ${t.origen} -> ${t.destino}</p>
+                        <p>TARIFA: ${t.tarifa}</p>
+                    </div>
                 </div>`;
             
             document.getElementById('printable-area').innerHTML = html;
             document.getElementById('print-overlay').classList.remove('hidden');
         }
 
-        // 6. GESTIÓN: ANULAR
+        // 6. GESTIÓN: BUSCAR Y REIMPRIMIR (MULTIPLE POR RUT O CÓDIGO)
+        async function buscarParaImprimir() {
+            const ticketOCodigo = document.getElementById('gestion-ticket').value.trim();
+            const divResultado = document.getElementById('resultado-gestion');
+            
+            if(!ticketOCodigo) return alert("Ingrese el código del ticket o RUT");
+
+            try {
+                const res = await fetch(`api/gestion_caja.php?accion=buscar&ticket=${encodeURIComponent(ticketOCodigo)}`);
+                const json = await res.json();
+
+                if(json.success && json.tickets && json.tickets.length > 0) {
+                    if (json.tickets.length === 1) {
+                        imprimirDesdeObjeto(json.tickets[0]);
+                        divResultado.innerHTML = ""; 
+                    } else {
+                        let html = `<div style="background:#e8f0fe; padding:10px; border-radius:6px; border:1px solid #b6d4fe; margin-top:5px;">`;
+                        html += `<strong style="color:#003580; font-size:0.85rem;">Encontramos ${json.tickets.length} pasajes:</strong><br>`;
+                        
+                        json.tickets.forEach(t => {
+                            html += `<button class="btn btn-sm btn-outline-primary" style="margin:3px; font-size:0.75rem; padding:3px 6px; border:1px solid #006ce4; background:white; cursor:pointer;" onclick="imprimirDesdeObjetoHtml(this)" data-ticket='${JSON.stringify(t)}'>
+                                        🖨️ ${t.codigo_ticket} (Asiento ${t.nro_asiento})
+                                     </button>`;
+                        });
+                        html += `</div>`;
+                        divResultado.innerHTML = html;
+                    }
+                } else {
+                    alert(json.msg || "No se encontró el pasaje.");
+                    divResultado.innerHTML = "";
+                }
+            } catch (error) {
+                alert("Hubo un error al buscar el pasaje.");
+            }
+        }
+
+        function imprimirDesdeObjeto(t) {
+            generarTicketImpresion({
+                folio: t.codigo_ticket,
+                origen: t.origen_boleto,
+                destino: t.destino_boleto,
+                asiento: t.nro_asiento,
+                pasajero: t.nombre_pasajero,
+                rut: t.rut_pasajero,
+                tarifa: t.tipo_pasajero,
+                total: t.total_pagado,
+                fecha: t.fecha_venta || new Date().toLocaleString()
+            });
+        }
+
+        function imprimirDesdeObjetoHtml(btn) {
+            const t = JSON.parse(btn.getAttribute('data-ticket'));
+            imprimirDesdeObjeto(t);
+            document.getElementById('gestion-ticket').value = t.codigo_ticket;
+        }
+
+        // 7. GESTIÓN: ANULAR
         async function anularBoleto() {
             const ticket = document.getElementById('gestion-ticket').value;
-            const oficina = document.getElementById('current-office').value; // Oficina que devuelve la plata
+            const oficina = document.getElementById('current-office').value; 
     
-            if(!ticket) return alert("Ingrese el código del ticket");
+            if(!ticket) return alert("Ingrese el código exacto del ticket a anular");
             if(!confirm("¿Desea ANULAR el ticket " + ticket + "? Se descontará el dinero de esta caja.")) return;
 
             const fd = new FormData(); 
@@ -408,11 +508,11 @@ $viajes = $stmt->fetchAll();
     
             alert(json.msg);
             if(json.success && datosViaje.id) {
-            seleccionarViaje({id: datosViaje.id, precio_adulto: preciosTramo.ADULTO, precio_mayor: preciosTramo.MAYOR, precio_estudiante: preciosTramo.ESTUDIANTE});
+                seleccionarViaje({id: datosViaje.id, precio_adulto: preciosTramo.ADULTO, precio_mayor: preciosTramo.MAYOR, precio_estudiante: preciosTramo.ESTUDIANTE});
             }
         }
 
-        // 7. CIERRE DE CAJA
+        // 8. CIERRE DE CAJA
         async function cerrarCaja() {
             const fecha = document.getElementById('cierre-fecha').value;
             const oficina = document.getElementById('current-office').value;
@@ -437,6 +537,28 @@ $viajes = $stmt->fetchAll();
     
             document.getElementById('printable-area').innerHTML = html;
             document.getElementById('print-overlay').classList.remove('hidden');
+        }
+
+        // 9. FUNCIÓN NUEVA: AUTOCOMPLETAR DATOS DEL PASAJERO POR RUT
+        async function buscarPasajeroPorRut() {
+            const rut = document.getElementById('p-rut').value.trim();
+            if(rut.length < 7) return; // Esperar a que tenga un tamaño lógico de RUT
+
+            try {
+                const res = await fetch(`api/gestion_caja.php?accion=buscar_cliente&rut=${encodeURIComponent(rut)}`);
+                const json = await res.json();
+
+                if(json.success) {
+                    const inputNombre = document.getElementById('p-nombre');
+                    const inputTelefono = document.getElementById('p-telefono');
+                    
+                    // Rellenar solo si el cajero no ha escrito nada aún
+                    if(!inputNombre.value) inputNombre.value = json.nombre;
+                    if(!inputTelefono.value && json.telefono) inputTelefono.value = json.telefono;
+                }
+            } catch (error) {
+                console.log("Error buscando historial del RUT", error);
+            }
         }
     </script>
 </body>

@@ -132,3 +132,19 @@ INSERT INTO matriz_precios (id_viaje, origen_tramo, destino_tramo, precio_adulto
 
 ALTER TABLE ventas ADD COLUMN fecha_anulacion DATETIME NULL;
 ALTER TABLE ventas ADD COLUMN oficina_anulacion VARCHAR(50) NULL;
+
+-- 1. Crear la tabla de clientes
+use jetbus_db;
+CREATE TABLE clientes (
+    rut VARCHAR(15) PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20) DEFAULT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Migrar los clientes que ya compraron pasajes (sin duplicarlos)
+INSERT IGNORE INTO clientes (rut, nombre, telefono)
+SELECT rut_pasajero, nombre_pasajero, telefono_contacto 
+FROM ventas 
+WHERE rut_pasajero IS NOT NULL AND rut_pasajero != ''
+GROUP BY rut_pasajero;
