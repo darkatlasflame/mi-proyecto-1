@@ -129,3 +129,6 @@ INSERT INTO matriz_precios (id_viaje, origen_tramo, destino_tramo, precio_adulto
 
 -- Saliendo desde Cerro Alto
 (1, 'Cerro Alto', 'Cañete', 1500, 1000, 800, 10);
+
+ALTER TABLE ventas ADD COLUMN fecha_anulacion DATETIME NULL;
+ALTER TABLE ventas ADD COLUMN oficina_anulacion VARCHAR(50) NULL;
