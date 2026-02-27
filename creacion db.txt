@@ -2,139 +2,48 @@
 -- 1. CREACIÓN DE LA BASE DE DATOS
 -- ==========================================
 DROP DATABASE IF EXISTS jetbus_db;
-CREATE DATABASE jetbus_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE jetbus_db;
-
+CREATE DATABASE jetbus_db;
+use jetbus_db;
 -- ==========================================
--- 2. CREACIÓN DE TABLAS
+-- 2. TABLA: BUSES (Tu flota)
 -- ==========================================
-
--- A. TABLA DE USUARIOS (Para el login de la oficina)
-CREATE TABLE usuarios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    rol ENUM('ADMIN', 'CAJERO') DEFAULT 'CAJERO'
-);
-
--- B. TABLA DE BUSES (Tu flota)
 CREATE TABLE buses (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    numero_maquina INT UNIQUE NOT NULL,
-    patente VARCHAR(10) UNIQUE NOT NULL,
-    marca VARCHAR(50),
-    pisos INT DEFAULT 1,
-    capacidad INT DEFAULT 46,
-    estado ENUM('ACTIVO', 'TALLER', 'BAJA') DEFAULT 'ACTIVO'
+    numero_maquina VARCHAR(10) NOT NULL,
+    patente VARCHAR(15) NOT NULL,
+    capacidad INT NOT NULL DEFAULT 40,
+    estado ENUM('ACTIVO', 'INACTIVO', 'TALLER') DEFAULT 'ACTIVO'
 );
 
--- C. TABLA DE VIAJES (El recorrido general matriz)
+-- ==========================================
+-- 3. TABLA: VIAJES (La programación de salidas)
+-- ==========================================
 CREATE TABLE viajes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    origen VARCHAR(50) NOT NULL,
-    destino VARCHAR(50) NOT NULL,
-    fecha_hora DATETIME NOT NULL,
     id_bus INT NOT NULL,
+    fecha_hora DATETIME NOT NULL,
+    estado ENUM('PROGRAMADO', 'EN_RUTA', 'FINALIZADO', 'CANCELADO') DEFAULT 'PROGRAMADO',
     FOREIGN KEY (id_bus) REFERENCES buses(id) ON DELETE RESTRICT
 );
 
--- D. MATRIZ DE PRECIOS (Precios por tramo y tipo de pasajero)
+-- ==========================================
+-- 4. TABLA: MATRIZ DE PRECIOS (Tarifario Universal)
+-- ¡Fíjate que ya no tiene id_viaje! Es un precio fijo por tramo.
+-- ==========================================
 CREATE TABLE matriz_precios (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    id_viaje INT NOT NULL,
     origen_tramo VARCHAR(50) NOT NULL,
     destino_tramo VARCHAR(50) NOT NULL,
-    precio_adulto INT NOT NULL DEFAULT 0,
-    precio_mayor INT NOT NULL DEFAULT 0,
-    precio_estudiante INT NOT NULL DEFAULT 0,
-    orden_parada INT DEFAULT 1,
-    FOREIGN KEY (id_viaje) REFERENCES viajes(id) ON DELETE CASCADE
-);
-
--- E. RESERVAS TEMPORALES (Evita choques entre Web y Oficina)
-CREATE TABLE reservas_temporales (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    token_sesion VARCHAR(100) NOT NULL,
-    id_viaje INT NOT NULL,
-    nro_asiento INT NOT NULL,
-    fecha_expiracion DATETIME NOT NULL,
-    UNIQUE(id_viaje, nro_asiento),
-    FOREIGN KEY (id_viaje) REFERENCES viajes(id) ON DELETE CASCADE
-);
-
--- F. TABLA DE VENTAS FINAL (Boletos emitidos)
-CREATE TABLE ventas (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    codigo_ticket VARCHAR(20) UNIQUE NOT NULL,
-    id_viaje INT NOT NULL,
-    nro_asiento INT NOT NULL,
-    rut_pasajero VARCHAR(12) NOT NULL,
-    nombre_pasajero VARCHAR(100) NOT NULL,
-    telefono_contacto VARCHAR(20) NOT NULL,
-    tipo_pasajero ENUM('ADULTO', 'MAYOR', 'ESTUDIANTE') DEFAULT 'ADULTO',
-    origen_boleto VARCHAR(50) NOT NULL,
-    destino_boleto VARCHAR(50) NOT NULL,
-    total_pagado INT NOT NULL DEFAULT 0,
-    fecha_venta DATETIME DEFAULT CURRENT_TIMESTAMP,
-    canal ENUM('OFICINA', 'WEB') DEFAULT 'OFICINA',
-    oficina_venta VARCHAR(50) DEFAULT 'ONLINE', 
-    estado ENUM('CONFIRMADO', 'ANULADO', 'REAGENDADO') DEFAULT 'CONFIRMADO',
-    FOREIGN KEY (id_viaje) REFERENCES viajes(id) ON DELETE CASCADE,
-    UNIQUE(id_viaje, nro_asiento) -- Evita vender el mismo asiento 2 veces
-);
-
--- G. PAGOS WEBPAY (Historial de transacciones web)
-CREATE TABLE pagos_webpay (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    token_ws VARCHAR(255) UNIQUE,
-    monto INT NOT NULL,
-    estado ENUM('PENDIENTE', 'APROBADO', 'RECHAZADO') DEFAULT 'PENDIENTE',
-    datos_cliente TEXT,
-    fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+    precio_adulto DECIMAL(10,2) NOT NULL,
+    precio_estudiante DECIMAL(10,2) NOT NULL,
+    precio_mayor DECIMAL(10,2) NOT NULL,
+    -- Esta regla evita que crees dos veces el mismo tramo por error:
+    UNIQUE KEY tramo_unico (origen_tramo, destino_tramo) 
 );
 
 -- ==========================================
--- 3. INSERTAR DATOS DE PRUEBA (RUTA CONCE - CAÑETE)
+-- 5. TABLA: CLIENTES (Para el autocompletado rápido)
 -- ==========================================
-
--- Insertar un usuario de prueba (Cajero)
-INSERT INTO usuarios (nombre, email, password, rol) 
-VALUES ('Cajero Central', 'caja@jetbus.cl', '123456', 'ADMIN');
-
--- Insertar un bus (Máquina 101)
-INSERT INTO buses (numero_maquina, patente, marca, capacidad) 
-VALUES (101, 'BUSS-99', 'Marcopolo', 40);
-
--- Insertar el viaje principal para hoy (Concepción a Cañete)
-INSERT INTO viajes (origen, destino, fecha_hora, id_bus) 
-VALUES ('Concepcion', 'Cañete', DATE_ADD(NOW(), INTERVAL 4 HOUR), 1);
-
--- Insertar Matriz de Precios COMPLETA (Concepción -> Laraquete -> Curanilahue -> Cerro Alto -> Cañete)
-INSERT INTO matriz_precios (id_viaje, origen_tramo, destino_tramo, precio_adulto, precio_mayor, precio_estudiante, orden_parada) VALUES 
--- Saliendo desde Concepción
-(1, 'Concepcion', 'Laraquete', 2500, 2000, 1500, 1),
-(1, 'Concepcion', 'Curanilahue', 4000, 3000, 2500, 2),
-(1, 'Concepcion', 'Cerro Alto', 5000, 3800, 3000, 3),
-(1, 'Concepcion', 'Cañete', 6000, 4500, 3500, 4),
-
--- Saliendo desde Laraquete
-(1, 'Laraquete', 'Curanilahue', 2000, 1500, 1000, 5),
-(1, 'Laraquete', 'Cerro Alto', 3000, 2200, 1800, 6),
-(1, 'Laraquete', 'Cañete', 4000, 3000, 2500, 7),
-
--- Saliendo desde Curanilahue
-(1, 'Curanilahue', 'Cerro Alto', 1500, 1000, 800, 8),
-(1, 'Curanilahue', 'Cañete', 2500, 2000, 1500, 9),
-
--- Saliendo desde Cerro Alto
-(1, 'Cerro Alto', 'Cañete', 1500, 1000, 800, 10);
-
-ALTER TABLE ventas ADD COLUMN fecha_anulacion DATETIME NULL;
-ALTER TABLE ventas ADD COLUMN oficina_anulacion VARCHAR(50) NULL;
-
--- 1. Crear la tabla de clientes
-use jetbus_db;
 CREATE TABLE clientes (
     rut VARCHAR(15) PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
@@ -142,9 +51,58 @@ CREATE TABLE clientes (
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. Migrar los clientes que ya compraron pasajes (sin duplicarlos)
-INSERT IGNORE INTO clientes (rut, nombre, telefono)
-SELECT rut_pasajero, nombre_pasajero, telefono_contacto 
-FROM ventas 
-WHERE rut_pasajero IS NOT NULL AND rut_pasajero != ''
-GROUP BY rut_pasajero;
+-- ==========================================
+-- 6. TABLA: VENTAS (Los pasajes inmutables)
+-- ==========================================
+CREATE TABLE ventas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo_ticket VARCHAR(20) NOT NULL UNIQUE,
+    
+    -- Relación con el viaje (Permite NULL por si se borra el viaje a futuro)
+    id_viaje INT NULL, 
+    
+    -- "Fotografía" histórica para que los datos sobrevivan aunque el viaje se elimine
+    fecha_viaje_historico DATETIME NULL,
+    bus_historico VARCHAR(50) NULL,
+    
+    -- Datos de la venta
+    nro_asiento INT NOT NULL,
+    rut_pasajero VARCHAR(15) NULL,
+    nombre_pasajero VARCHAR(100) NOT NULL,
+    telefono_contacto VARCHAR(20) NULL,
+    tipo_pasajero ENUM('ADULTO', 'ESTUDIANTE', 'MAYOR') DEFAULT 'ADULTO',
+    origen_boleto VARCHAR(50) NOT NULL,
+    destino_boleto VARCHAR(50) NOT NULL,
+    total_pagado DECIMAL(10,2) NOT NULL,
+    canal ENUM('CAJA', 'WEB') DEFAULT 'CAJA',
+    oficina_venta VARCHAR(50) DEFAULT 'WEB',
+    estado ENUM('CONFIRMADO', 'ANULADO') DEFAULT 'CONFIRMADO',
+    fecha_venta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- ¡La magia está aquí! ON DELETE SET NULL protege tus ventas de borrados accidentales
+    FOREIGN KEY (id_viaje) REFERENCES viajes(id) ON DELETE SET NULL
+);
+
+-- ==========================================
+-- 7. DATOS DE PRUEBA (Para que no partas en blanco)
+-- ==========================================
+
+-- Insertar un par de buses
+INSERT INTO buses (numero_maquina, patente, capacidad) VALUES 
+('101', 'AB-CD-12', 40),
+('102', 'EF-GH-34', 44);
+
+-- Insertar el tarifario universal (Ejemplo)
+INSERT INTO matriz_precios (origen_tramo, destino_tramo, precio_adulto, precio_estudiante, precio_mayor) VALUES 
+('Concepción', 'Laraquete', 3000, 2000, 1500),
+('Concepción', 'Curanilahue', 4000, 3000, 2000),
+('Concepción', 'Cañete', 6000, 4500, 3000),
+('Laraquete', 'Curanilahue', 1500, 1000, 800);
+
+-- Insertar algunos viajes de prueba (Para mañana a las 08:00 y 10:00)
+INSERT INTO viajes (id_bus, fecha_hora) VALUES 
+(1, DATE_ADD(CURRENT_DATE(), INTERVAL '08:00' HOUR_MINUTE)),
+(2, DATE_ADD(CURRENT_DATE(), INTERVAL '10:00' HOUR_MINUTE));
+
+ALTER TABLE viajes ADD COLUMN origen VARCHAR(50) NOT NULL DEFAULT 'Concepción' AFTER id_bus;
+ALTER TABLE viajes ADD COLUMN destino VARCHAR(50) NOT NULL DEFAULT 'Cañete' AFTER origen;

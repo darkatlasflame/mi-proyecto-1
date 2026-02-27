@@ -1,231 +1,195 @@
-<?php 
-// public/seleccion.php
-require_once '../config/db.php'; 
-
-// 1. Recibimos EXACTAMENTE el viaje que el cliente clickeó en resultados.php
-$id_viaje = $_GET['id_viaje'] ?? 0;
+<?php
+$id_viaje = $_GET['id_viaje'] ?? '';
 $origen = $_GET['origen'] ?? '';
 $destino = $_GET['destino'] ?? '';
+$fecha = $_GET['fecha'] ?? '';
+$hora = $_GET['hora'] ?? '';
 
-if (!$id_viaje || !$origen || !$destino) {
-    die("<div class='container text-center mt-5'><h3 class='text-danger'>Error: Faltan datos del viaje.</h3><a href='index.php' class='btn btn-primary mt-3'>Volver al inicio</a></div>");
-}
+// Precios recibidos por URL
+$precios = [
+    'ADULTO' => $_GET['precio_adulto'] ?? 0,
+    'MAYOR' => $_GET['precio_mayor'] ?? 0,
+    'ESTUDIANTE' => $_GET['precio_estudiante'] ?? 0
+];
 
-// 2. Buscamos ESE viaje específico por su ID y cruzamos sus precios
-$sql = "SELECT v.id, v.fecha_hora, b.numero_maquina, 
-               m.precio_adulto, m.precio_mayor, m.precio_estudiante
-        FROM viajes v
-        JOIN buses b ON v.id_bus = b.id
-        JOIN matriz_precios m ON m.id_viaje = v.id
-        WHERE v.id = ? AND m.origen_tramo = ? AND m.destino_tramo = ?";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$id_viaje, $origen, $destino]);
-$viaje = $stmt->fetch();
-
-if(!$viaje) {
-    die("<div class='container text-center mt-5'><h3 class='text-danger'>Error: No se encontró la tarifa para este tramo en este bus.</h3><p>Asegúrate de haberle puesto precios a este viaje en el panel de administración.</p><a href='index.php' class='btn btn-warning mt-3'>Volver al inicio</a></div>");
-}
+if(!$id_viaje) { header('Location: index.php'); exit; }
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JetBus | Selecciona tu Asiento</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Pagar Pasaje | JetBus</title>
     <style>
-        body { background: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
+        :root { --primary: #003580; --accent: #006ce4; --success: #28a745; --bg: #f5f7fa; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); }
+        header { background: var(--primary); padding: 15px 20px; color: white; display:flex; justify-content:space-between; align-items:center;}
+        .container { max-width: 1000px; margin: 20px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 0 15px; }
+        @media (max-width: 768px) { .container { grid-template-columns: 1fr; } }
         
-        .bus-container {
-            background: white; border-radius: 20px; padding: 30px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
-            max-width: 350px; margin: 0 auto;
-            border: 2px solid #e9ecef;
-        }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
+        h3 { color: var(--primary); margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         
-        .seat-grid { 
-            display: grid; 
-            grid-template-columns: repeat(4, 1fr); 
-            gap: 12px; 
-            margin-top: 20px; 
-        }
-        
-        .seat {
-            width: 50px; height: 50px; background: #e2e8f0; border-radius: 8px 8px 15px 15px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer; font-weight: bold; color: #64748b; border: 1px solid #cbd5e1;
-            position: relative; transition: 0.2s;
-        }
-        
-        .seat::before { 
-            content: ''; position: absolute; top: -6px; width: 36px; height: 6px; 
-            background: inherit; border-radius: 5px 5px 0 0; border: 1px solid #cbd5e1; border-bottom: none;
-        }
-        
-        .seat:hover:not(.occupied):not(.bloqueado) { background: #cbd5e1; }
-        .seat.selected { background: #003580; color: white; border-color: #002255; }
-        .seat.occupied { background: #dc3545; color: white; cursor: not-allowed; opacity: 0.7; }
-        .seat.bloqueado { background: #ffc107; color: black; cursor: not-allowed; }
-        
-        .summary-card {
-            background: white; padding: 25px; border-radius: 15px;
-            box-shadow: 0 10px 20px rgba(0,0,0,0.08); position: sticky; top: 20px;
-        }
-        
-        .price-tag { font-size: 2.2rem; font-weight: 900; color: #003580; }
-        
-        .btn-next {
-            background: #ffc107; color: #003580; font-weight: bold;
-            padding: 15px; border-radius: 8px; border: none; width: 100%;
-            font-size: 1.1rem; transition: 0.3s;
-        }
-        .btn-next:hover:not(:disabled) { background: #e0a800; transform: translateY(-2px); }
-        .btn-next:disabled { background: #e9ecef; color: #adb5bd; cursor: not-allowed; }
+        /* Mapa del Bus */
+        .bus-layout { background: white; padding: 2rem; border: 2px solid #e5e7eb; border-radius: 40px 40px 10px 10px; max-width: 250px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr) 25px repeat(2, 1fr); gap: 10px; }
+        .seat { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); transition: 0.2s; }
+        .seat.libre { background: #e8f0fe; color: var(--primary); }
+        .seat.seleccionado { background: var(--accent); color: white; transform: scale(1.1); box-shadow: 0 4px 10px rgba(0,108,228,0.3); }
+        .seat.ocupado { background: #dc3545; color: white; cursor: not-allowed; border: none; }
+        .aisle { grid-column: 3; }
+        .bus-nose { grid-column: 1/-1; background: #333; color: white; text-align: center; padding: 5px; border-radius: 4px; font-size: 0.7rem; margin-bottom: 10px; }
+
+        /* Formulario */
+        label { display: block; font-size: 0.85rem; font-weight: bold; color: gray; margin-top: 15px; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; outline: none; box-sizing: border-box;}
+        .btn-pagar { background: var(--success); color: white; border: none; padding: 15px; width: 100%; border-radius: 6px; font-weight: bold; font-size: 1.1rem; margin-top: 20px; cursor: pointer; transition: 0.2s; }
+        .btn-pagar:hover { background: #218838; }
+        .btn-pagar:disabled { background: #ccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-<nav class="navbar navbar-dark" style="background-color: #003580;">
+    <header>
+        <a href="javascript:history.back()" style="color:white; text-decoration:none; font-weight:bold;">⬅ Atrás</a>
+        <div style="font-weight: bold;">Completar Compra</div>
+    </header>
+
     <div class="container">
-        <a class="navbar-brand fw-bold" href="javascript:history.back()"><i class="fas fa-arrow-left"></i> Volver a horarios</a>
-        <span class="navbar-text text-light"><i class="fas fa-lock"></i> Compra Segura</span>
-    </div>
-</nav>
-
-<div class="container py-5">
-    <div class="row">
-        <div class="col-md-7 mb-4">
-            <h3 class="fw-bold mb-4" style="color: #003580;">1. Elige tu asiento</h3>
-            <div class="bus-container">
-                <div class="text-center mb-3 text-muted fw-bold p-2" style="background: #f8f9fa; border-radius: 8px;">
-                    <i class="fas fa-steering-wheel"></i> FRENTE DEL BUS
+        <div class="card">
+            <h3 style="text-align:center;">1. Elige tu Asiento</h3>
+            <div id="bus-layout-grid" class="bus-layout">
+                <div class="bus-nose">FRENTE DEL BUS</div>
                 </div>
-                
-                <div class="seat-grid" id="bus-map">
-                    <div class="text-center w-100 py-5">Cargando asientos...</div>
-                </div>
-                
-                <div class="d-flex justify-content-between mt-4 pt-3 border-top" style="font-size: 0.85rem;">
-                    <span><div style="display:inline-block; width:15px; height:15px; background:#e2e8f0; border-radius:3px;"></div> Libre</span>
-                    <span><div style="display:inline-block; width:15px; height:15px; background:#003580; border-radius:3px;"></div> Tu Asiento</span>
-                    <span><div style="display:inline-block; width:15px; height:15px; background:#dc3545; border-radius:3px;"></div> Ocupado</span>
-                </div>
+            <div style="text-align:center; margin-top:15px; font-size:0.9rem;">
+                <span style="display:inline-block; width:15px; height:15px; background:#e8f0fe; border-radius:3px; vertical-align:middle;"></span> Libre 
+                <span style="display:inline-block; width:15px; height:15px; background:#dc3545; border-radius:3px; vertical-align:middle; margin-left:10px;"></span> Ocupado
             </div>
         </div>
 
-        <div class="col-md-5">
-            <div class="summary-card">
-                <h4 class="mb-3 fw-bold border-bottom pb-2" style="color: #003580;">2. Resumen de Viaje</h4>
-                
-                <div class="mb-3">
-                    <p class="mb-0 text-muted small">Ruta:</p>
-                    <h5 class="fw-bold"><?php echo htmlspecialchars($origen); ?> <i class="fas fa-arrow-right text-warning"></i> <?php echo htmlspecialchars($destino); ?></h5>
-                    <p class="text-muted small mb-0">
-                        <i class="far fa-calendar-alt"></i> <?php echo date('d/m/Y', strtotime($viaje['fecha_hora'])); ?> | 
-                        <i class="far fa-clock"></i> <?php echo date('H:i', strtotime($viaje['fecha_hora'])); ?> hrs
-                    </p>
-                    <p class="text-muted small">Bus Nº <?php echo $viaje['numero_maquina']; ?></p>
-                </div>
-
-                <div class="mb-3 p-3" style="background: #f8f9fa; border-radius: 8px;">
-                    <span class="text-muted">Asiento seleccionado:</span>
-                    <h2 class="mb-0" id="lbl-asiento-elegido" style="color: #003580;">-</h2>
-                </div>
-
-                <div class="mb-4">
-                    <label class="form-label fw-bold text-muted">Tipo de Pasajero</label>
-                    <select class="form-select border-primary" id="tipo_pasajero" onchange="calcularTotal()">
-                        <option value="ADULTO" data-price="<?php echo $viaje['precio_adulto']; ?>">Adulto - $<?php echo number_format($viaje['precio_adulto'],0,',','.'); ?></option>
-                        <option value="ESTUDIANTE" data-price="<?php echo $viaje['precio_estudiante']; ?>">Estudiante - $<?php echo number_format($viaje['precio_estudiante'],0,',','.'); ?></option>
-                        <option value="MAYOR" data-price="<?php echo $viaje['precio_mayor']; ?>">Tercera Edad - $<?php echo number_format($viaje['precio_mayor'],0,',','.'); ?></option>
-                    </select>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <span class="text-muted fw-bold">Total a Pagar:</span>
-                    <span class="price-tag" id="total-display">$0</span>
-                </div>
-
-                <form action="checkout.php" method="POST">
-                    <input type="hidden" name="id_viaje" value="<?php echo $viaje['id']; ?>">
-                    <input type="hidden" name="origen" value="<?php echo htmlspecialchars($origen); ?>">
-                    <input type="hidden" name="destino" value="<?php echo htmlspecialchars($destino); ?>">
-                    <input type="hidden" name="asiento" id="input_asiento" required>
-                    <input type="hidden" name="precio" id="input_precio"> <input type="hidden" name="tipo_pasajero" id="input_tipo">
-                    
-                    <button type="submit" class="btn-next shadow" id="btn-pagar" disabled>
-                        CONTINUAR AL PAGO <i class="fas fa-chevron-right ms-2"></i>
-                    </button>
-                </form>
-
+        <div class="card">
+            <h3>2. Datos del Pasajero</h3>
+            <div style="background:#f8fafc; padding:15px; border-radius:6px; margin-bottom:15px; border:1px solid #e2e8f0;">
+                <strong>Resumen:</strong> <?= htmlspecialchars($origen) ?> a <?= htmlspecialchars($destino) ?><br>
+                <small><?= date('d/m/Y', strtotime($fecha)) ?> a las <?= htmlspecialchars($hora) ?> hrs</small><br>
+                <strong style="color:var(--accent)">Asiento seleccionado: <span id="lbl-asiento">-</span></strong>
             </div>
+
+            <label>TIPO DE PASAJE</label>
+            <select id="tipo-tarifa" onchange="actualizarPrecio()">
+                <option value="ADULTO" data-price="<?= $precios['ADULTO'] ?>">Adulto - $<?= number_format($precios['ADULTO'], 0, '', '.') ?></option>
+                <option value="MAYOR" data-price="<?= $precios['MAYOR'] ?>">Tercera Edad - $<?= number_format($precios['MAYOR'], 0, '', '.') ?></option>
+                <option value="ESTUDIANTE" data-price="<?= $precios['ESTUDIANTE'] ?>">Estudiante - $<?= number_format($precios['ESTUDIANTE'], 0, '', '.') ?></option>
+            </select>
+
+            <label>RUT (Sin puntos ni guion)</label>
+            <input type="text" id="p-rut" placeholder="Ej: 123456789">
+
+            <label>NOMBRE COMPLETO</label>
+            <input type="text" id="p-nombre" placeholder="Nombre de quien viaja">
+
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1">
+                    <label>TELÉFONO</label>
+                    <input type="text" id="p-telefono" placeholder="+569...">
+                </div>
+                <div style="flex:1">
+                    <label>CORREO ELECTRÓNICO</label>
+                    <input type="email" id="p-email" placeholder="Para enviar el boleto" required>
+                </div>
+            </div>
+
+            <div style="text-align:right; margin-top:20px; font-size:1.5rem; font-weight:bold; color:var(--success);">
+                Total: <span id="lbl-total">$0</span>
+            </div>
+
+            <button id="btn-submit" class="btn-pagar" onclick="iniciarPago()" disabled>PAGAR CON WEBPAY / FLOW</button>
         </div>
     </div>
-</div>
 
-<script>
-    const ID_VIAJE = <?php echo $viaje['id']; ?>;
-    let asientoSeleccionado = null;
+    <script>
+        let asientoSeleccionado = null;
+        let precioFinal = <?= $precios['ADULTO'] ?>;
 
-    async function cargarBus() {
-        try {
-            const res = await fetch(`../admin/api/get_mapa.php?id=${ID_VIAJE}`);
+        // Cargar mapa del bus usando la API del Admin
+        async function cargarMapa() {
+            const res = await fetch(`../admin/api/get_mapa.php?id=<?= $id_viaje ?>`);
             const asientos = await res.json();
             
-            const grid = document.getElementById('bus-map');
-            grid.innerHTML = ''; 
-            
+            let html = '<div class="bus-nose">FRENTE DEL BUS</div>';
             asientos.forEach(a => {
-                let div = document.createElement('div');
-                div.className = `seat ${a.estado}`;
-                div.innerText = a.nro;
-                
-                if (a.nro % 4 === 3) div.style.gridColumn = "3"; 
-
-                if(a.estado === 'libre') {
-                    div.onclick = () => seleccionarAsiento(div, a.nro);
-                } else {
-                    div.classList.add('occupied');
-                }
-                
-                grid.appendChild(div);
+                if(a.nro % 4 === 3) html += '<div class="aisle"></div>';
+                let cls = a.estado; 
+                html += `<div class="seat ${cls}" onclick="clickAsiento(this, ${a.nro}, '${cls}')">${a.nro}</div>`;
             });
-            
-            calcularTotal();
-            
-        } catch (error) {
-            document.getElementById('bus-map').innerHTML = "<p class='text-danger'>Error al cargar asientos.</p>";
+            document.getElementById('bus-layout-grid').innerHTML = html;
+            actualizarPrecio();
         }
-    }
 
-    function seleccionarAsiento(elemento, nro) {
-        document.querySelectorAll('.seat.selected').forEach(s => s.classList.remove('selected'));
-        elemento.classList.add('selected');
-        asientoSeleccionado = nro;
-        
-        document.getElementById('lbl-asiento-elegido').innerText = nro;
-        document.getElementById('input_asiento').value = nro;
-        document.getElementById('btn-pagar').disabled = false;
-        
-        calcularTotal();
-    }
+        function clickAsiento(elemento, nro, estado) {
+            if(estado !== 'libre') return;
+            document.querySelectorAll('.seat.seleccionado').forEach(s => s.classList.replace('seleccionado', 'libre'));
+            elemento.classList.replace('libre', 'seleccionado');
+            
+            asientoSeleccionado = nro;
+            document.getElementById('lbl-asiento').innerText = nro;
+            document.getElementById('btn-submit').disabled = false;
+        }
 
-    function calcularTotal() {
-        const select = document.getElementById('tipo_pasajero');
-        const precio = select.options[select.selectedIndex].getAttribute('data-price');
-        const tipo = select.value;
+        function actualizarPrecio() {
+            const sel = document.getElementById('tipo-tarifa');
+            precioFinal = sel.options[sel.selectedIndex].getAttribute('data-price');
+            document.getElementById('lbl-total').innerText = '$' + new Intl.NumberFormat('es-CL').format(precioFinal);
+        }
 
-        document.getElementById('total-display').innerText = '$' + new Intl.NumberFormat('es-CL').format(precio);
-        
-        document.getElementById('input_precio').value = precio;
-        document.getElementById('input_tipo').value = tipo;
-    }
+        // --- CONEXIÓN CON FLOW ---
+        async function iniciarPago() {
+            const rut = document.getElementById('p-rut').value;
+            const nombre = document.getElementById('p-nombre').value;
+            const telefono = document.getElementById('p-telefono').value;
+            const email = document.getElementById('p-email').value;
+            const tipoPax = document.getElementById('tipo-tarifa').value;
 
-    cargarBus();
-</script>
+            if(!asientoSeleccionado) return alert("Por favor, selecciona un asiento en el mapa.");
+            if(!rut || !nombre || !email) return alert("RUT, Nombre y Correo son obligatorios.");
 
+            const btn = document.getElementById('btn-submit');
+            btn.innerText = "Conectando con el banco... ⏳";
+            btn.disabled = true;
+
+            const fd = new FormData();
+            fd.append('id_viaje', '<?= $id_viaje ?>');
+            fd.append('asiento', asientoSeleccionado);
+            fd.append('rut', rut);
+            fd.append('nombre', nombre);
+            fd.append('telefono', telefono);
+            fd.append('email', email);
+            fd.append('origen', '<?= $origen ?>');
+            fd.append('destino', '<?= $destino ?>');
+            fd.append('tipo_pasajero', tipoPax);
+            fd.append('total_pagado', precioFinal);
+
+            try {
+                // Llama al archivo iniciar_pago.php que creamos antes
+                const res = await fetch('api/iniciar_pago.php', { method: 'POST', body: fd });
+                const json = await res.json();
+
+                if(json.status === 'success') {
+                    // ¡Todo salió bien! Redirigimos al cliente a la página segura de Flow
+                    window.location.href = json.url_pago;
+                } else {
+                    alert("Error: " + json.msg);
+                    btn.innerText = "PAGAR CON WEBPAY / FLOW";
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                alert("Error de conexión. Intente nuevamente.");
+                btn.innerText = "PAGAR CON WEBPAY / FLOW";
+                btn.disabled = false;
+            }
+        }
+
+        // Arrancar
+        cargarMapa();
+    </script>
 </body>
 </html>

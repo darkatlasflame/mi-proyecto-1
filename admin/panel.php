@@ -52,8 +52,7 @@
             <button id="btn-nuevo" class="btn btn-primary" onclick="openModal()">+ Nuevo Registro</button>
         </header>
 
-        <div class="card" id="table-container">
-            </div>
+        <div class="card" id="table-container"></div>
     </main>
 
     <div id="modal" class="modal">
@@ -71,42 +70,40 @@
         let currentView = 'viajes';
         let editId = null;
         let catalogoBuses = [];
-        let catalogoViajes = [];
+        let catalogoCiudades = [];
 
-        // Configuración de las vistas y formularios
+        // Configuración blindada de vistas y formularios
         const schemas = {
             viajes: {
                 title: "Programación de Viajes",
-                cols: ["ID", "Ruta Principal", "Fecha/Hora", "Bus Asignado", "Acciones"],
+                cols: ["ID", "Ruta Principal", "Fecha/Hora", "Bus Asignado", "Estado", "Acciones"],
                 fields: [
-                    { name: "origen", label: "Origen Principal", type: "text" },
-                    { name: "destino", label: "Destino Final", type: "text" },
+                    { name: "origen", label: "Origen Principal", type: "select", source: "ciudades" },
+                    { name: "destino", label: "Destino Final", type: "select", source: "ciudades" },
                     { name: "fecha_hora", label: "Fecha y Hora", type: "datetime-local" },
-                    { name: "id_bus", label: "Bus Asignado", type: "select", source: "buses" }
+                    { name: "id_bus", label: "Bus Asignado", type: "select", source: "buses" },
+                    { name: "estado", label: "Estado", type: "select", options: [{id:'PROGRAMADO', val:'Programado'}, {id:'FINALIZADO', val:'Finalizado'}, {id:'CANCELADO', val:'Cancelado'}] }
                 ]
             },
             buses: {
                 title: "Flota de Buses",
-                cols: ["Máquina", "Patente", "Marca", "Capacidad", "Estado", "Acciones"],
+                cols: ["Máquina", "Patente", "Capacidad", "Estado", "Acciones"],
                 fields: [
-                    { name: "numero_maquina", label: "N° Máquina", type: "number" },
+                    { name: "numero_maquina", label: "N° Máquina", type: "text" },
                     { name: "patente", label: "Patente", type: "text" },
-                    { name: "marca", label: "Marca", type: "text" },
                     { name: "capacidad", label: "Capacidad (Asientos)", type: "number" },
-                    { name: "estado", label: "Estado", type: "select", options: [{id:'ACTIVO', val:'Activo'}, {id:'TALLER', val:'Taller'}] }
+                    { name: "estado", label: "Estado", type: "select", options: [{id:'ACTIVO', val:'Activo'}, {id:'INACTIVO', val:'Inactivo'}, {id:'TALLER', val:'Taller'}] }
                 ]
             },
             matriz_precios: {
-                title: "Matriz de Precios por Tramo",
-                cols: ["Viaje", "Tramo", "Adulto", "T. Edad", "Estudiante", "Acciones"],
+                title: "Matriz de Precios Universal (Por Tramo)",
+                cols: ["Origen", "Destino", "Adulto", "T. Edad", "Estudiante", "Acciones"],
                 fields: [
-                    { name: "id_viaje", label: "Viaje Asociado", type: "select", source: "viajes" },
-                    { name: "origen_tramo", label: "Origen Tramo", type: "text" },
-                    { name: "destino_tramo", label: "Destino Tramo", type: "text" },
+                    { name: "origen_tramo", label: "Origen Tramo (Ciudad)", type: "text" },
+                    { name: "destino_tramo", label: "Destino Tramo (Ciudad)", type: "text" },
                     { name: "precio_adulto", label: "Precio Adulto ($)", type: "number" },
                     { name: "precio_mayor", label: "Precio T. Edad ($)", type: "number" },
-                    { name: "precio_estudiante", label: "Precio Estudiante ($)", type: "number" },
-                    { name: "orden_parada", label: "Orden (1, 2, 3...)", type: "number" }
+                    { name: "precio_estudiante", label: "Precio Estudiante ($)", type: "number" }
                 ]
             },
             ventas: {
@@ -128,8 +125,8 @@
         async function cargarCatalogos() {
             const res = await fetch('api/crud.php?action=catalogos');
             const data = await res.json();
-            catalogoBuses = data.buses;
-            catalogoViajes = data.viajes;
+            catalogoBuses = data.buses || [];
+            catalogoCiudades = data.ciudades || [];
         }
 
         async function loadView(view) {
@@ -140,13 +137,11 @@
             event && event.target ? event.target.classList.add('active') : document.querySelector(`[onclick="loadView('${view}')"]`).classList.add('active');
             
             document.getElementById('page-title').innerText = schemas[view].title;
-            
-            // Ocultar botón "Nuevo" en ventas (solo se edita)
             document.getElementById('btn-nuevo').style.display = (view === 'ventas') ? 'none' : 'block';
 
             const res = await fetch(`api/crud.php?action=read&table=${view}`);
             const json = await res.json();
-            renderTable(json.data);
+            renderTable(json.data || []);
         }
 
         function renderTable(data) {
@@ -157,19 +152,18 @@
             data.forEach(row => {
                 html += `<tr>`;
                 if(currentView === 'viajes') {
-                    html += `<td>${row.id}</td><td>${row.origen} ➝ ${row.destino}</td><td>${row.fecha_hora}</td><td>Máquina ${row.numero_maquina}</td>`;
+                    html += `<td>${row.id}</td><td><strong>${row.origen}</strong> ➔ ${row.destino}</td><td>${row.fecha_hora}</td><td>Máquina ${row.numero_maquina || '-'}</td><td>${row.estado || 'PROGRAMADO'}</td>`;
                 } else if(currentView === 'buses') {
-                    html += `<td>${row.numero_maquina}</td><td>${row.patente}</td><td>${row.marca}</td><td>${row.capacidad}</td><td><span style="background:${row.estado==='ACTIVO'?'#dcfce3':'#fee2e2'}; color:${row.estado==='ACTIVO'?'#166534':'#991b1b'}; padding:2px 8px; border-radius:10px; font-size:0.8rem;">${row.estado}</span></td>`;
+                    html += `<td>${row.numero_maquina}</td><td>${row.patente}</td><td>${row.capacidad}</td><td><span style="background:${row.estado==='ACTIVO'?'#dcfce3':'#fee2e2'}; color:${row.estado==='ACTIVO'?'#166534':'#991b1b'}; padding:2px 8px; border-radius:10px; font-size:0.8rem;">${row.estado}</span></td>`;
                 } else if(currentView === 'matriz_precios') {
-                    html += `<td>ID ${row.id_viaje}</td><td>${row.origen_tramo} ➝ ${row.destino_tramo}</td><td>$${row.precio_adulto}</td><td>$${row.precio_mayor}</td><td>$${row.precio_estudiante}</td>`;
+                    html += `<td>${row.origen_tramo}</td><td>${row.destino_tramo}</td><td>$${row.precio_adulto}</td><td>$${row.precio_mayor}</td><td>$${row.precio_estudiante}</td>`;
                 } else if(currentView === 'ventas') {
                     html += `<td>${row.codigo_ticket}</td><td>${row.nombre_pasajero}</td><td>${row.rut_pasajero}</td><td>${row.telefono_contacto}</td><td>${row.nro_asiento}</td>`;
                 }
 
                 html += `<td style="display:flex; gap:5px;">`;
-                if(currentView === 'ventas' || currentView === 'matriz_precios') {
-                    html += `<button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem;" onclick='openModal(${JSON.stringify(row)})'>Editar</button>`;
-                }
+                html += `<button class="btn btn-warning" style="padding:4px 8px; font-size:0.8rem;" onclick='openModal(${JSON.stringify(row).replace(/'/g, "&apos;")})'>Editar</button>`;
+                
                 if(currentView !== 'ventas') {
                     html += `<button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteRow(${row.id})">Borrar</button>`;
                 }
@@ -186,20 +180,20 @@
             
             schemas[currentView].fields.forEach(f => {
                 let inputHtml = '';
-                let val = data ? data[f.name] : '';
+                let val = data ? (data[f.name] || '') : '';
 
                 if(f.type === 'select') {
                     let opts = '';
                     if(f.source === 'buses') {
                         catalogoBuses.forEach(b => opts += `<option value="${b.id}" ${val==b.id?'selected':''}>Máquina ${b.numero_maquina} (${b.patente})</option>`);
-                    } else if (f.source === 'viajes') {
-                        catalogoViajes.forEach(v => opts += `<option value="${v.id}" ${val==v.id?'selected':''}>ID ${v.id}: ${v.origen} ➝ ${v.destino} (${v.fecha})</option>`);
+                    } else if (f.source === 'ciudades') {
+                        if (catalogoCiudades.length === 0) opts = '<option value="">Crea un precio primero para registrar ciudades</option>';
+                        catalogoCiudades.forEach(c => opts += `<option value="${c}" ${val===c?'selected':''}>${c}</option>`);
                     } else {
                         f.options.forEach(o => opts += `<option value="${o.id}" ${val==o.id?'selected':''}>${o.val}</option>`);
                     }
-                    inputHtml = `<select name="${f.name}">${opts}</select>`;
+                    inputHtml = `<select name="${f.name}" required>${opts}</select>`;
                 } else {
-                    // Control de formato datetime-local para HTML5
                     if(f.type === 'datetime-local' && val) val = val.replace(' ', 'T').substring(0, 16);
                     inputHtml = `<input type="${f.type}" name="${f.name}" value="${val}" required>`;
                 }
@@ -217,14 +211,16 @@
             fd.append('table', currentView);
             if(editId) fd.append('id', editId);
 
-            const res = await fetch('api/crud.php', { method: 'POST', body: fd });
-            const json = await res.json();
-            
-            if(json.success) {
-                closeModal();
-                if(currentView === 'viajes' || currentView === 'buses') await cargarCatalogos();
-                loadView(currentView);
-            } else alert("Error: " + json.error);
+            try {
+                const res = await fetch('api/crud.php', { method: 'POST', body: fd });
+                const json = await res.json();
+                
+                if(json.success) {
+                    closeModal();
+                    if(currentView === 'matriz_precios' || currentView === 'buses') await cargarCatalogos();
+                    loadView(currentView);
+                } else alert("Error: " + json.error);
+            } catch(e) { alert("Error de conexión al guardar."); }
         }
 
         async function deleteRow(id) {

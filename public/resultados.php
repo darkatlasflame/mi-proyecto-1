@@ -1,74 +1,99 @@
-<?php 
-// public/resultados.php
-require_once '../config/db.php'; 
-
+<?php
 $origen = $_GET['origen'] ?? '';
 $destino = $_GET['destino'] ?? '';
-$fecha = $_GET['fecha'] ?? date('Y-m-d');
+$fecha = $_GET['fecha'] ?? '';
 
-$sql = "SELECT v.id, v.fecha_hora, b.numero_maquina, b.marca,
-               m.precio_adulto, m.precio_mayor, m.precio_estudiante
-        FROM viajes v
-        JOIN buses b ON v.id_bus = b.id
-        JOIN matriz_precios m ON m.id_viaje = v.id
-        WHERE m.origen_tramo = ? AND m.destino_tramo = ? AND DATE(v.fecha_hora) = ?
-        ORDER BY v.fecha_hora ASC";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$origen, $destino, $fecha]);
-$viajes = $stmt->fetchAll();
+if(!$origen || !$destino || !$fecha) {
+    header('Location: index.php');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>JetBus | Horarios Disponibles</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados | JetBus</title>
+    <style>
+        :root { --primary: #003580; --accent: #006ce4; --bg: #f5f7fa; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); }
+        header { background: var(--primary); padding: 15px 20px; color: white; display:flex; justify-content:space-between; align-items:center;}
+        .container { max-width: 800px; margin: 20px auto; padding: 0 15px; }
+        .resumen-busqueda { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; border: 1px solid #ddd; }
+        .bus-card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        .bus-time { font-size: 1.5rem; font-weight: 900; color: var(--primary); }
+        .btn-comprar { background: var(--accent); color: white; text-decoration: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; transition: 0.2s; }
+        .btn-comprar:hover { background: #0056b3; }
+        .loader { text-align: center; padding: 40px; color: gray; }
+    </style>
 </head>
-<body style="background: #f4f7f6;">
+<body>
 
-<nav class="navbar navbar-dark" style="background-color: #003580;">
+    <header>
+        <a href="index.php" style="color:white; text-decoration:none; font-weight:bold;">⬅ Volver</a>
+        <div style="font-weight: bold;">Selecciona tu viaje</div>
+    </header>
+
     <div class="container">
-        <a class="navbar-brand fw-bold" href="index.php"><i class="fas fa-arrow-left"></i> Volver a buscar</a>
+        <div class="resumen-busqueda">
+            <h2 style="margin:0; font-size:1.2rem;"><?= htmlspecialchars($origen) ?> ➔ <?= htmlspecialchars($destino) ?></h2>
+            <p style="margin:5px 0 0 0; color:gray;">Fecha: <?= date('d/m/Y', strtotime($fecha)) ?></p>
+        </div>
+
+        <div id="lista-viajes">
+            <div class="loader">Buscando buses disponibles... 🚌</div>
+        </div>
     </div>
-</nav>
 
-<div class="container py-5">
-    <h2 class="fw-bold mb-4" style="color: #003580;">Salidas: <?php echo $origen; ?> <i class="fas fa-arrow-right text-warning"></i> <?php echo $destino; ?></h2>
-    <p class="text-muted"><i class="far fa-calendar-alt"></i> Fecha: <?php echo date('d/m/Y', strtotime($fecha)); ?></p>
+    <script>
+        async function cargarViajes() {
+            const fd = new FormData();
+            fd.append('origen', '<?= $origen ?>');
+            fd.append('destino', '<?= $destino ?>');
+            fd.append('fecha', '<?= $fecha ?>');
 
-    <?php if(count($viajes) === 0): ?>
-        <div class="alert alert-warning text-center p-4 shadow-sm">
-            <h4><i class="fas fa-exclamation-triangle"></i> No hay salidas programadas para este día.</h4>
-            <a href="index.php" class="btn btn-primary mt-3">Probar otra fecha</a>
-        </div>
-    <?php else: ?>
-        
-        <div class="row">
-            <?php foreach($viajes as $v): ?>
-            <div class="col-md-8 mx-auto mb-3">
-                <div class="card shadow-sm border-0" style="border-left: 5px solid #003580;">
-                    <div class="card-body d-flex justify-content-between align-items-center">
+            try {
+                // Usamos la API unificada del admin!
+                const res = await fetch('../admin/api/buscar_viajes.php', { method: 'POST', body: fd });
+                const json = await res.json();
+                
+                const contenedor = document.getElementById('lista-viajes');
+
+                if(!json.success || json.viajes.length === 0) {
+                    contenedor.innerHTML = `<div style="text-align:center; padding:30px; background:white; border-radius:8px;">
+                        <h3>Lo sentimos 😔</h3>
+                        <p>${json.msg || 'No hay buses programados para esta fecha y ruta.'}</p>
+                        <a href="index.php" class="btn-comprar" style="display:inline-block; margin-top:10px;">Buscar otra fecha</a>
+                    </div>`;
+                    return;
+                }
+
+                let html = '';
+                json.viajes.forEach(v => {
+                    // Creamos el link hacia seleccion.php pasando todos los datos
+                    const link = `seleccion.php?id_viaje=${v.id}&origen=<?= urlencode($origen) ?>&destino=<?= urlencode($destino) ?>&fecha=<?= $fecha ?>&hora=${v.hora}&precio_adulto=${v.precio_adulto}&precio_estudiante=${v.precio_estudiante}&precio_mayor=${v.precio_mayor}`;
+                    
+                    html += `
+                    <div class="bus-card">
                         <div>
-                            <h3 class="fw-bold text-primary mb-0"><?php echo date('H:i', strtotime($v['fecha_hora'])); ?> hrs</h3>
-                            <small class="text-muted">Bus <?php echo $v['marca']; ?> (Nº <?php echo $v['numero_maquina']; ?>)</small>
+                            <div class="bus-time">${v.hora} hrs</div>
+                            <div style="color:gray; font-size:0.9rem; margin-top:5px;">Directo • Bus ${v.numero_maquina}</div>
                         </div>
-                        <div class="text-end">
-                            <span class="d-block text-muted small">Desde</span>
-                            <h4 class="fw-bold text-success mb-2">$<?php echo number_format($v['precio_estudiante'], 0, ',', '.'); ?></h4>
-                            <a href="seleccion.php?id_viaje=<?php echo $v['id']; ?>&origen=<?php echo urlencode($origen); ?>&destino=<?php echo urlencode($destino); ?>" class="btn btn-warning fw-bold px-4">
-                                VER ASIENTOS <i class="fas fa-chevron-right"></i>
-                            </a>
+                        <div style="text-align: right;">
+                            <div style="font-size:0.8rem; color:gray; margin-bottom:5px;">Desde $${v.precio_estudiante}</div>
+                            <a href="${link}" class="btn-comprar">Elegir Asiento</a>
                         </div>
-                    </div>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
+                    </div>`;
+                });
+                contenedor.innerHTML = html;
 
-    <?php endif; ?>
-</div>
+            } catch (error) {
+                document.getElementById('lista-viajes').innerHTML = '<p style="color:red; text-align:center;">Error al conectar con el servidor.</p>';
+            }
+        }
 
+        // Cargar los viajes apenas abra la página
+        cargarViajes();
+    </script>
 </body>
 </html>
