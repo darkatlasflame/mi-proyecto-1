@@ -19,6 +19,9 @@ direcciones accesibles de interes:
 panel de adimistracion: localhost/jetbus/admin/panel.php
 panel oficina: localhost/jetbus/admin/index.php
 panel venta online: localhost/jetbus/public/index.php
+login credencial
+usuario: admin
+contraseña: cordillera123
 
 @TODOS LOS DERECHOS RESERVADOS A LITTLE SURY STUDIO 2026@
 @ATLAS FUERA BUENA SUERTE@
