@@ -1,19 +1,13 @@
 <?php
-$origen = $_GET['origen'] ?? '';
-$destino = $_GET['destino'] ?? '';
-$fecha = $_GET['fecha'] ?? '';
-
-if(!$origen || !$destino || !$fecha) {
-    header('Location: index.php');
-    exit;
-}
+$origen = $_GET['origen'] ?? ''; $destino = $_GET['destino'] ?? ''; $fecha = $_GET['fecha'] ?? '';
+if(!$origen || !$destino || !$fecha) { header('Location: index.php'); exit; }
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resultados | JetBus</title>
+    <title>Resultados | Buses Cordillera</title>
     <style>
         :root { --primary: #003580; --accent: #006ce4; --bg: #f5f7fa; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); }
@@ -39,30 +33,20 @@ if(!$origen || !$destino || !$fecha) {
             <h2 style="margin:0; font-size:1.2rem;"><?= htmlspecialchars($origen) ?> ➔ <?= htmlspecialchars($destino) ?></h2>
             <p style="margin:5px 0 0 0; color:gray;">Fecha: <?= date('d/m/Y', strtotime($fecha)) ?></p>
         </div>
-
-        <div id="lista-viajes">
-            <div class="loader">Buscando buses disponibles... 🚌</div>
-        </div>
+        <div id="lista-viajes"><div class="loader">Buscando buses disponibles... 🚌</div></div>
     </div>
 
     <script>
         async function cargarViajes() {
-            const fd = new FormData();
-            fd.append('origen', '<?= $origen ?>');
-            fd.append('destino', '<?= $destino ?>');
-            fd.append('fecha', '<?= $fecha ?>');
-
+            const fd = new FormData(); fd.append('origen', '<?= $origen ?>'); fd.append('destino', '<?= $destino ?>'); fd.append('fecha', '<?= $fecha ?>');
             try {
-                // Usamos la API unificada del admin!
                 const res = await fetch('../admin/api/buscar_viajes.php', { method: 'POST', body: fd });
                 const json = await res.json();
-                
                 const contenedor = document.getElementById('lista-viajes');
 
                 if(!json.success || json.viajes.length === 0) {
                     contenedor.innerHTML = `<div style="text-align:center; padding:30px; background:white; border-radius:8px;">
-                        <h3>Lo sentimos 😔</h3>
-                        <p>${json.msg || 'No hay buses programados para esta fecha y ruta.'}</p>
+                        <h3>Lo sentimos 😔</h3><p>${json.msg || 'No hay buses programados para esta fecha y ruta.'}</p>
                         <a href="index.php" class="btn-comprar" style="display:inline-block; margin-top:10px;">Buscar otra fecha</a>
                     </div>`;
                     return;
@@ -70,9 +54,7 @@ if(!$origen || !$destino || !$fecha) {
 
                 let html = '';
                 json.viajes.forEach(v => {
-                    // Creamos el link hacia seleccion.php pasando todos los datos
                     const link = `seleccion.php?id_viaje=${v.id}&origen=<?= urlencode($origen) ?>&destino=<?= urlencode($destino) ?>&fecha=<?= $fecha ?>&hora=${v.hora}&precio_adulto=${v.precio_adulto}&precio_estudiante=${v.precio_estudiante}&precio_mayor=${v.precio_mayor}`;
-                    
                     html += `
                     <div class="bus-card">
                         <div>
@@ -80,19 +62,14 @@ if(!$origen || !$destino || !$fecha) {
                             <div style="color:gray; font-size:0.9rem; margin-top:5px;">Directo • Bus ${v.numero_maquina}</div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size:0.8rem; color:gray; margin-bottom:5px;">Desde $${v.precio_estudiante}</div>
+                            <div style="font-size:0.8rem; color:gray; margin-bottom:5px;">Tarifa $${v.precio_adulto}</div>
                             <a href="${link}" class="btn-comprar">Elegir Asiento</a>
                         </div>
                     </div>`;
                 });
                 contenedor.innerHTML = html;
-
-            } catch (error) {
-                document.getElementById('lista-viajes').innerHTML = '<p style="color:red; text-align:center;">Error al conectar con el servidor.</p>';
-            }
+            } catch (error) { document.getElementById('lista-viajes').innerHTML = '<p style="color:red; text-align:center;">Error al conectar con el servidor.</p>'; }
         }
-
-        // Cargar los viajes apenas abra la página
         cargarViajes();
     </script>
 </body>

@@ -4,13 +4,7 @@ $origen = $_GET['origen'] ?? '';
 $destino = $_GET['destino'] ?? '';
 $fecha = $_GET['fecha'] ?? '';
 $hora = $_GET['hora'] ?? '';
-
-// Precios recibidos por URL
-$precios = [
-    'ADULTO' => $_GET['precio_adulto'] ?? 0,
-    'MAYOR' => $_GET['precio_mayor'] ?? 0,
-    'ESTUDIANTE' => $_GET['precio_estudiante'] ?? 0
-];
+$precio_adulto = $_GET['precio_adulto'] ?? 0;
 
 if(!$id_viaje) { header('Location: index.php'); exit; }
 ?>
@@ -19,7 +13,7 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pagar Pasaje | JetBus</title>
+    <title>Pagar Pasaje | Buses Cordillera</title>
     <style>
         :root { --primary: #003580; --accent: #006ce4; --success: #28a745; --bg: #f5f7fa; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); }
@@ -30,7 +24,6 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e5e7eb; }
         h3 { color: var(--primary); margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
         
-        /* Mapa del Bus */
         .bus-layout { background: white; padding: 2rem; border: 2px solid #e5e7eb; border-radius: 40px 40px 10px 10px; max-width: 250px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, 1fr) 25px repeat(2, 1fr); gap: 10px; }
         .seat { aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; cursor: pointer; border: 1px solid rgba(0,0,0,0.05); transition: 0.2s; }
         .seat.libre { background: #e8f0fe; color: var(--primary); }
@@ -39,12 +32,13 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
         .aisle { grid-column: 3; }
         .bus-nose { grid-column: 1/-1; background: #333; color: white; text-align: center; padding: 5px; border-radius: 4px; font-size: 0.7rem; margin-bottom: 10px; }
 
-        /* Formulario */
         label { display: block; font-size: 0.85rem; font-weight: bold; color: gray; margin-top: 15px; margin-bottom: 5px; }
-        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; outline: none; box-sizing: border-box;}
+        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; outline: none; box-sizing: border-box;}
         .btn-pagar { background: var(--success); color: white; border: none; padding: 15px; width: 100%; border-radius: 6px; font-weight: bold; font-size: 1.1rem; margin-top: 20px; cursor: pointer; transition: 0.2s; }
         .btn-pagar:hover { background: #218838; }
         .btn-pagar:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .tarifa-fija { padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 1rem; background: #e9ecef; color: #555; font-weight: bold; margin-bottom: 15px; text-align: center;}
     </style>
 </head>
 <body>
@@ -59,7 +53,7 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
             <h3 style="text-align:center;">1. Elige tu Asiento</h3>
             <div id="bus-layout-grid" class="bus-layout">
                 <div class="bus-nose">FRENTE DEL BUS</div>
-                </div>
+            </div>
             <div style="text-align:center; margin-top:15px; font-size:0.9rem;">
                 <span style="display:inline-block; width:15px; height:15px; background:#e8f0fe; border-radius:3px; vertical-align:middle;"></span> Libre 
                 <span style="display:inline-block; width:15px; height:15px; background:#dc3545; border-radius:3px; vertical-align:middle; margin-left:10px;"></span> Ocupado
@@ -75,11 +69,9 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
             </div>
 
             <label>TIPO DE PASAJE</label>
-            <select id="tipo-tarifa" onchange="actualizarPrecio()">
-                <option value="ADULTO" data-price="<?= $precios['ADULTO'] ?>">Adulto - $<?= number_format($precios['ADULTO'], 0, '', '.') ?></option>
-                <option value="MAYOR" data-price="<?= $precios['MAYOR'] ?>">Tercera Edad - $<?= number_format($precios['MAYOR'], 0, '', '.') ?></option>
-                <option value="ESTUDIANTE" data-price="<?= $precios['ESTUDIANTE'] ?>">Estudiante - $<?= number_format($precios['ESTUDIANTE'], 0, '', '.') ?></option>
-            </select>
+            <div class="tarifa-fija">
+                Tarifa General (Adulto) - $<?= number_format($precio_adulto, 0, '', '.') ?>
+            </div>
 
             <label>RUT (Sin puntos ni guion)</label>
             <input type="text" id="p-rut" placeholder="Ej: 123456789">
@@ -98,8 +90,11 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
                 </div>
             </div>
 
+            <label>ANOTACIONES (Opcional)</label>
+            <input type="text" id="p-notas" placeholder="Ej: Viajo con mascota, Sube en ruta...">
+
             <div style="text-align:right; margin-top:20px; font-size:1.5rem; font-weight:bold; color:var(--success);">
-                Total: <span id="lbl-total">$0</span>
+                Total: $<?= number_format($precio_adulto, 0, '', '.') ?>
             </div>
 
             <button id="btn-submit" class="btn-pagar" onclick="iniciarPago()" disabled>PAGAR CON WEBPAY / FLOW</button>
@@ -108,9 +103,9 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
 
     <script>
         let asientoSeleccionado = null;
-        let precioFinal = <?= $precios['ADULTO'] ?>;
+        const precioFinal = <?= $precio_adulto ?>;
+        const tipoPaxFijo = 'ADULTO';
 
-        // Cargar mapa del bus usando la API del Admin
         async function cargarMapa() {
             const res = await fetch(`../admin/api/get_mapa.php?id=<?= $id_viaje ?>`);
             const asientos = await res.json();
@@ -122,7 +117,6 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
                 html += `<div class="seat ${cls}" onclick="clickAsiento(this, ${a.nro}, '${cls}')">${a.nro}</div>`;
             });
             document.getElementById('bus-layout-grid').innerHTML = html;
-            actualizarPrecio();
         }
 
         function clickAsiento(elemento, nro, estado) {
@@ -135,19 +129,12 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
             document.getElementById('btn-submit').disabled = false;
         }
 
-        function actualizarPrecio() {
-            const sel = document.getElementById('tipo-tarifa');
-            precioFinal = sel.options[sel.selectedIndex].getAttribute('data-price');
-            document.getElementById('lbl-total').innerText = '$' + new Intl.NumberFormat('es-CL').format(precioFinal);
-        }
-
-        // --- CONEXIÓN CON FLOW ---
         async function iniciarPago() {
             const rut = document.getElementById('p-rut').value;
             const nombre = document.getElementById('p-nombre').value;
             const telefono = document.getElementById('p-telefono').value;
             const email = document.getElementById('p-email').value;
-            const tipoPax = document.getElementById('tipo-tarifa').value;
+            const notas = document.getElementById('p-notas').value;
 
             if(!asientoSeleccionado) return alert("Por favor, selecciona un asiento en el mapa.");
             if(!rut || !nombre || !email) return alert("RUT, Nombre y Correo son obligatorios.");
@@ -163,18 +150,17 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
             fd.append('nombre', nombre);
             fd.append('telefono', telefono);
             fd.append('email', email);
+            fd.append('anotaciones', notas);
             fd.append('origen', '<?= $origen ?>');
             fd.append('destino', '<?= $destino ?>');
-            fd.append('tipo_pasajero', tipoPax);
+            fd.append('tipo_pasajero', tipoPaxFijo);
             fd.append('total_pagado', precioFinal);
 
             try {
-                // Llama al archivo iniciar_pago.php que creamos antes
                 const res = await fetch('api/iniciar_pago.php', { method: 'POST', body: fd });
                 const json = await res.json();
 
                 if(json.status === 'success') {
-                    // ¡Todo salió bien! Redirigimos al cliente a la página segura de Flow
                     window.location.href = json.url_pago;
                 } else {
                     alert("Error: " + json.msg);
@@ -188,7 +174,6 @@ if(!$id_viaje) { header('Location: index.php'); exit; }
             }
         }
 
-        // Arrancar
         cargarMapa();
     </script>
 </body>

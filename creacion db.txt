@@ -106,3 +106,4 @@ INSERT INTO viajes (id_bus, fecha_hora) VALUES
 
 ALTER TABLE viajes ADD COLUMN origen VARCHAR(50) NOT NULL DEFAULT 'Concepción' AFTER id_bus;
 ALTER TABLE viajes ADD COLUMN destino VARCHAR(50) NOT NULL DEFAULT 'Cañete' AFTER origen;
+ALTER TABLE ventas ADD COLUMN anotaciones VARCHAR(255) NULL DEFAULT '';

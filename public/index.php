@@ -1,7 +1,6 @@
 <?php
 require_once '../config/db.php';
 
-// Cargar las paradas únicas desde el tarifario universal
 try {
     $stmt = $pdo->query("
         SELECT ciudad FROM (
@@ -11,16 +10,14 @@ try {
         ) AS lista_ciudades ORDER BY ciudad
     ");
     $paradas = $stmt->fetchAll(PDO::FETCH_COLUMN);
-} catch (Exception $e) {
-    $paradas = [];
-}
+} catch (Exception $e) { $paradas = []; }
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JetBus | Compra tus pasajes online</title>
+    <title>Buses Cordillera | Compra tus pasajes online</title>
     <style>
         :root { --primary: #003580; --accent: #006ce4; --bg: #f5f7fa; }
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: #333; }
@@ -39,7 +36,7 @@ try {
 <body>
 
     <header>
-        <div class="logo">JetBus<span>Pro</span></div>
+        <div class="logo">Buses<span>Cordillera</span></div>
         <div style="font-weight: bold;">Pasajes Online</div>
     </header>
 
